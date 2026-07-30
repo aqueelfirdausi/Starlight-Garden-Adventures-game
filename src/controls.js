@@ -8,8 +8,18 @@
 
 const DEADZONE = 8 // px, so a resting thumb doesn't creep.
 const INPUT_EASE = 7 // How fast steer follows the finger. Lower = more syrup.
+// How far a finger may wander and still count as a tap rather than a drag.
+// Generous, because a child's "tap" always slides a little.
+const TAP_SLOP = 16
 
-export function createControls({ canvas, button }) {
+/**
+ * @param {object} options
+ * @param {{isTarget:Function, collect:Function}} [options.tap]
+ *        Optional collectible hit-testing. When a pointer lands on something
+ *        tappable it is held back from steering until it either moves far
+ *        enough to clearly be a drag, or is released as a tap.
+ */
+export function createControls({ canvas, button, tap }) {
   // Raw = where the finger actually is. Smoothed = what the firefly is told.
   // Easing between them is why touch-down nudges rather than jolts.
   let rawX = 0
@@ -24,6 +34,11 @@ export function createControls({ canvas, button }) {
   // Children rest spare fingers on the screen constantly; when the steering
   // finger lifts we hand control to one that is still down instead of stopping.
   const touches = new Map() // pointerId -> { originX, originY, x, y }
+
+  // Pointers that landed on a collectible and have not yet declared themselves
+  // a tap or a drag. These are deliberately NOT in `touches`, which is what
+  // stops a tap from also steering the firefly.
+  const pendingTaps = new Map() // pointerId -> { originX, originY }
 
   // Drag distance for full tilt, sized off the screen so the gesture feels the
   // same on a small phone and a big tablet, in either orientation.
@@ -62,23 +77,43 @@ export function createControls({ canvas, button }) {
   // --- Steering (canvas) ---------------------------------------------------
   // The button sits above the canvas in the DOM, so a pointer that lands on it
   // never reaches this handler at all. No hit-testing needed.
-  function onCanvasPointerDown(event) {
-    touches.set(event.pointerId, {
-      originX: event.clientX,
-      originY: event.clientY,
-      x: event.clientX,
-      y: event.clientY,
-    })
+  /** Begin steering with this pointer, anchored wherever it currently is. */
+  function beginSteering(pointerId, x, y) {
+    touches.set(pointerId, { originX: x, originY: y, x, y })
     // First finger down takes the wheel; later ones just wait their turn.
     if (steerPointerId === null) {
-      steerPointerId = event.pointerId
+      steerPointerId = pointerId
       rawX = 0
       rawY = 0
     }
+  }
+
+  function onCanvasPointerDown(event) {
+    // Landing on a collectible holds this pointer back rather than steering
+    // with it. It becomes a drag only if it actually moves.
+    if (tap && tap.isTarget(event.clientX, event.clientY)) {
+      pendingTaps.set(event.pointerId, { originX: event.clientX, originY: event.clientY })
+      event.preventDefault()
+      return
+    }
+
+    beginSteering(event.pointerId, event.clientX, event.clientY)
     event.preventDefault()
   }
 
   function onPointerMove(event) {
+    const pending = pendingTaps.get(event.pointerId)
+    if (pending) {
+      const moved = Math.hypot(event.clientX - pending.originX, event.clientY - pending.originY)
+      if (moved > TAP_SLOP) {
+        // Clearly a drag after all. Re-anchor at the current point so control
+        // starts from here instead of snapping by the distance already moved.
+        pendingTaps.delete(event.pointerId)
+        beginSteering(event.pointerId, event.clientX, event.clientY)
+      }
+      return
+    }
+
     const touch = touches.get(event.pointerId)
     if (!touch) return
     touch.x = event.clientX
@@ -87,6 +122,12 @@ export function createControls({ canvas, button }) {
   }
 
   function onPointerUp(event) {
+    // Released without ever becoming a drag — that's a tap.
+    if (pendingTaps.delete(event.pointerId)) {
+      if (event.type !== 'pointercancel' && tap) tap.collect(event.clientX, event.clientY)
+      return
+    }
+
     if (!touches.delete(event.pointerId)) return
     if (event.pointerId !== steerPointerId) return
 

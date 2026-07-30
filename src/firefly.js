@@ -37,6 +37,10 @@ const TRAIL_MIN_STEP = 0.085
 // white, so the base colour has to start well short of it to survive.
 const GOLD = 0xffc247
 const HALO = 0xffa53d
+// Where the glow shifts to on collection — paler and warmer than the resting
+// amber, so a pickup reads as a flare of warmth rather than just "brighter".
+const WARM = 0xffe0ad
+const PULSE_DECAY = 1.7 // ~0.6s for the flare to fall away.
 
 function createBody() {
   const group = new THREE.Group()
@@ -142,6 +146,11 @@ export function createFirefly(scene) {
 
   const tmp = new THREE.Vector3()
 
+  // 0..1, spiked by pulse() when something is collected and decaying every frame.
+  let warmPulse = 0
+  const haloColor = new THREE.Color(HALO)
+  const warmColor = new THREE.Color(WARM)
+
   function pushTrailSample(x, y, z) {
     head = (head + 1) % TRAIL_POINTS
     trail.positions[head * 3 + 0] = x
@@ -245,9 +254,16 @@ export function createFirefly(scene) {
     // Kept below 1 on purpose: two stacked additive sprites over a bright core
     // clip straight to white through the tone mapper, and she stops looking gold.
     const glow = 0.55 + Math.min(speed / 8, 1) * 0.18
-    body.inner.material.opacity = glow
-    body.outer.material.opacity = 0.2 + Math.min(speed / 8, 1) * 0.12
-    body.lamp.intensity = 12 + Math.min(speed / 8, 1) * 6
+
+    // Collection flare. Squared so it falls off softly rather than switching off.
+    warmPulse = Math.max(0, warmPulse - PULSE_DECAY * dt)
+    const flare = warmPulse * warmPulse
+
+    body.inner.material.opacity = glow + flare * 0.3
+    body.outer.material.opacity = 0.2 + Math.min(speed / 8, 1) * 0.12 + flare * 0.26
+    body.outer.scale.setScalar(3.4 + flare * 2.1) // Halo swells with the flare.
+    body.lamp.intensity = 12 + Math.min(speed / 8, 1) * 6 + flare * 20
+    body.lamp.color.copy(haloColor).lerp(warmColor, flare)
 
     // Sample by DISTANCE, not by time. On a timer, hovering stacks all 48 points
     // on one spot and 48 coincident additive sprites blow the core out to white.
@@ -269,5 +285,15 @@ export function createFirefly(scene) {
     material.opacity += (target - material.opacity) * (1 - Math.exp(-3 * dt))
   }
 
-  return { group: body.group, position, velocity, update }
+  return {
+    group: body.group,
+    position,
+    velocity,
+    update,
+
+    /** Flare the glow warmer. Called when something is collected. */
+    pulse() {
+      warmPulse = 1
+    },
+  }
 }

@@ -26,4 +26,15 @@ export const COLORS = {
   mushroomCap: 0xe490ae,
   mushroomGlow: 0xffb877,
   mushroomStem: 0xdcd5e8,
+
+  // Collectibles. The burst colours are what the particle spray uses, and they
+  // are pushed brighter than the item itself so the reward reads at a glance.
+  petal: 0xf0d192,
+  petalEmissive: 0xffcf7a,
+  petalBurst: 0xffdf9e,
+
+  seed: 0xf2a7c3,
+  seedEmissive: 0xff8fbb,
+  seedGlow: 0xffb6d5,
+  seedBurst: 0xffc0dc,
 }

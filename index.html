@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- maximum-scale + user-scalable=no stop pinch-zoom from fighting drag-to-steer.
+         viewport-fit=cover lets the scene fill past the tablet's rounded corners. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#1e2a55" />
+    <title>Starlight Garden Adventures</title>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <!-- UI sits above the canvas. A pointer that lands on the button never reaches
+         the canvas, which is what keeps steering and fluttering independent. -->
+    <div id="ui">
+      <button id="flutter" type="button" aria-label="Flutter up">
+        <span class="glyph"></span>
+        <span class="label">Flutter&nbsp;Up</span>
+      </button>
+    </div>
+
+    <div id="fps">--</div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,106 @@
+import * as THREE from 'three'
+import { COLORS } from './palette.js'
+import { createGround, groundHeightAt, makeRandom, MEADOW_RADIUS } from './terrain.js'
+import { createGrass, createMushrooms } from './props.js'
+
+/**
+ * Assembles the moonlit meadow: sky, fog, lighting, and the scenery from
+ * props.js. The whole world costs about 8 draw calls, which leaves most of the
+ * ~150 budget free for whatever Phase 2 brings.
+ */
+
+function createSky() {
+  // A gradient in a shader costs one draw call and no texture memory. depthTest
+  // is off and renderOrder is -1, so it paints first and everything covers it.
+  const material = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    depthTest: false,
+    fog: false,
+    uniforms: {
+      topColor: { value: new THREE.Color(COLORS.skyTop) },
+      horizonColor: { value: new THREE.Color(COLORS.skyHorizon) },
+    },
+    vertexShader: `
+      varying vec3 vDir;
+      void main() {
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 topColor;
+      uniform vec3 horizonColor;
+      varying vec3 vDir;
+      void main() {
+        // pow() keeps the lavender band low and tight to the horizon instead of
+        // washing halfway up the sky.
+        float h = pow(smoothstep(-0.15, 0.72, vDir.y), 0.85);
+        gl_FragColor = vec4(mix(horizonColor, topColor, h), 1.0);
+      }
+    `,
+  })
+
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 24, 16), material)
+  sky.renderOrder = -1
+  sky.frustumCulled = false
+  return sky
+}
+
+function createLights(scene) {
+  // Broad ambient fill. Costs nothing and stops the shadow side going black.
+  const hemi = new THREE.HemisphereLight(COLORS.hemiSky, COLORS.hemiGround, 1.15)
+  scene.add(hemi)
+
+  // The moon — the one and only shadow caster in the game.
+  const moon = new THREE.DirectionalLight(COLORS.moon, 1.5)
+  moon.position.set(16, 26, 12)
+  moon.castShadow = true
+  moon.shadow.mapSize.set(1024, 1024)
+
+  // Tight ortho box: a 1024 map stretched over the whole meadow would give
+  // blocky shadows, so it only covers where the mushrooms actually are.
+  const box = MEADOW_RADIUS + 4
+  moon.shadow.camera.left = -box
+  moon.shadow.camera.right = box
+  moon.shadow.camera.top = box
+  moon.shadow.camera.bottom = -box
+  moon.shadow.camera.near = 1
+  moon.shadow.camera.far = 80
+  moon.shadow.bias = -0.0012 // Removes the shadow acne on the rolling slopes.
+  moon.shadow.normalBias = 0.02
+
+  scene.add(moon)
+  scene.add(moon.target) // Target defaults to the origin, which is where we want it.
+
+  return { hemi, moon }
+}
+
+export function createWorld(scene) {
+  const random = makeRandom(20260731)
+
+  scene.background = null // The sky dome paints the background itself.
+  // Far plane sits inside the ground plane's corners, so the meadow always ends
+  // in haze rather than at a visible edge.
+  scene.fog = new THREE.Fog(COLORS.fog, 20, 66)
+
+  const sky = createSky()
+  const ground = createGround()
+  const grass = createGrass(random)
+  const mushrooms = createMushrooms(random)
+
+  scene.add(sky, ground, grass, mushrooms)
+  const lights = createLights(scene)
+
+  const glowMaterial = mushrooms.userData.glowMaterial
+
+  return {
+    groundHeightAt,
+    lights,
+
+    /** Slow shared breathing on the mushroom halos. One uniform, no geometry work. */
+    update(elapsed) {
+      glowMaterial.opacity = 0.34 + Math.sin(elapsed * 0.7) * 0.08
+    },
+  }
+}

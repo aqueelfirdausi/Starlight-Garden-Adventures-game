@@ -1,11 +1,15 @@
 import * as THREE from 'three'
 import './style.css'
+import { COLORS } from './palette.js'
 import { createWorld } from './world.js'
 import { createFirefly } from './firefly.js'
 import { createControls } from './controls.js'
 import { createCameraRig } from './camera.js'
 import { createEffects } from './effects.js'
 import { createCollectibles } from './collectibles.js'
+import { createGardenState } from './state.js'
+import { createPatches, PATCH_COUNT } from './patches.js'
+import { createFlowers } from './flowers.js'
 
 /**
  * Bootstrap: renderer, camera, resize, frame loop, fps readout.
@@ -39,13 +43,36 @@ const world = createWorld(scene)
 const firefly = createFirefly(scene)
 const effects = createEffects(scene)
 
+const state = createGardenState()
+
 // The reward moment, assembled here: the item's own burst plus a warm flare on
 // the firefly. Collectibles doesn't know about effects and effects doesn't know
 // about the firefly — main is the only place that knows about all three.
 const collectibles = createCollectibles(scene, {
+  state,
   onCollect({ position, color }) {
     effects.burst(position, color)
     firefly.pulse()
+  },
+})
+
+// Flowers bloom out of patches, so patches only needs to say "here", and the
+// bloom's own burst fires from flowers when the face finishes opening.
+const flowers = createFlowers(scene, {
+  state,
+  capacity: PATCH_COUNT,
+  onBloom(position, color) {
+    effects.burst(position, color)
+    firefly.pulse()
+  },
+})
+
+const patches = createPatches(scene, {
+  state,
+  onPlant(patch) {
+    // Facing the firefly means the flower wakes up already looking at her.
+    flowers.plant(patch, firefly.position)
+    effects.burst(patch.pos, COLORS.dirtRim)
   },
 })
 
@@ -63,9 +90,18 @@ function rayFromScreen(clientX, clientY) {
 const controls = createControls({
   canvas,
   button,
+  // Collectibles get first refusal on a tap, then patches. A patch only claims
+  // the tap when it could actually be planted, so with no seeds in hand a tap
+  // over dirt steers normally instead of being silently swallowed.
   tap: {
-    isTarget: (x, y) => collectibles.hitTest(rayFromScreen(x, y)),
-    collect: (x, y) => collectibles.collectAt(rayFromScreen(x, y)),
+    isTarget(x, y) {
+      const ray = rayFromScreen(x, y)
+      return collectibles.hitTest(ray) || patches.hitTest(ray)
+    },
+    collect(x, y) {
+      const ray = rayFromScreen(x, y)
+      return collectibles.collectAt(ray) || patches.plantAt(ray)
+    },
   },
 })
 const cameraRig = createCameraRig(camera, firefly.position)
@@ -95,7 +131,10 @@ resize()
 // Dev-only handle for poking at the game from the browser console. Stripped
 // from production builds by Vite's dead-code elimination.
 if (import.meta.env.DEV) {
-  window.__garden = { renderer, scene, camera, world, firefly, controls, cameraRig, collectibles, effects }
+  window.__garden = {
+    renderer, scene, camera, world, firefly, controls, cameraRig,
+    collectibles, effects, state, patches, flowers,
+  }
 }
 
 // Timer replaces the deprecated Clock. connect(document) makes it use the Page
@@ -118,6 +157,8 @@ renderer.setAnimationLoop(() => {
   controls.update(dt)
   firefly.update(dt, elapsed, controls)
   collectibles.update(dt, elapsed, firefly.position)
+  patches.update(dt, elapsed, firefly.position)
+  flowers.update(dt, elapsed)
   effects.update(dt)
   cameraRig.update(dt)
   world.update(elapsed)

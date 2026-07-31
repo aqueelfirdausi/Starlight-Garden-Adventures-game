@@ -40,9 +40,8 @@ const FADING = 4
 
 const TAU = Math.PI * 2
 
-export function createCollectibles(scene, { onCollect } = {}) {
+export function createCollectibles(scene, { onCollect, state } = {}) {
   const random = makeRandom(90210)
-  const counts = { petals: 0, seeds: 0, total: 0 }
 
   const petals = createPetalMesh(PETAL_COUNT)
   const seeds = createSeedMesh(SEED_COUNT)
@@ -108,9 +107,10 @@ export function createCollectibles(scene, { onCollect } = {}) {
   function collect(item, isPetal) {
     item.state = POPPING
     item.timer = 0
-    if (isPetal) counts.petals++
-    else counts.seeds++
-    counts.total++
+    // Tallies live in state.js now, because planting has to spend the seeds
+    // this earns and both sides need the same numbers.
+    if (isPetal) state.addPetal()
+    else state.addSeed()
 
     if (onCollect) {
       onCollect({
@@ -292,9 +292,9 @@ export function createCollectibles(scene, { onCollect } = {}) {
       return true
     },
 
-    /** Running totals, for the Phase 5 HUD to read. */
+    /** Running totals. Kept here for Phase 2 compatibility; state.js owns them. */
     get counts() {
-      return { ...counts }
+      return state.counts
     },
   }
 }

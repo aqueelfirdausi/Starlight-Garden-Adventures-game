@@ -37,4 +37,17 @@ export const COLORS = {
   seedEmissive: 0xff8fbb,
   seedGlow: 0xffb6d5,
   seedBurst: 0xffc0dc,
+
+  // Dirt patches. The rim colour is close to the ground so the disc fades into
+  // the moss instead of sitting on it like a sticker.
+  dirt: 0x3b2b23,
+  dirtRim: 0x46583f,
+  patchGlow: 0xbfe3c0, // Mint invitation, only shown when she has a seed.
+
+  // Flowers. One of these per bloom, picked at random — the whole game palette,
+  // so no two neighbours are guaranteed to clash or to match.
+  flowerPalette: [0xc9b6f0, 0xa8e0c8, 0xffc9a3, 0xf7b8d0, 0xa9cdf0, 0xf5dd9c],
+  flowerCentre: 0xfff0c4,
+  flowerStem: 0x7fae7c,
+  flowerEye: 0x2e2a3d,
 }

@@ -176,8 +176,11 @@ export function createFirefly(scene) {
    * @param {number} elapsed seconds since start, for the idle bob
    * @param {{steerX:number, steerY:number, rise:boolean}} input
    *        steerX/steerY are screen-space, -1..1, Y positive = up the screen.
+   * @param {number} night 0 by day, 1 at midnight. Additive glow over a bright
+   *        sky just reads as haze, so the halo and the lamp both ride this
+   *        rather than being tuned once for one time of day.
    */
-  function update(dt, elapsed, input) {
+  function update(dt, elapsed, input, night = 1) {
     // Screen-space drag maps straight to world axes because the camera never
     // rotates — up the screen is always "away", which stays true as she turns.
     velocity.x += input.steerX * ACCEL * dt
@@ -259,10 +262,16 @@ export function createFirefly(scene) {
     warmPulse = Math.max(0, warmPulse - PULSE_DECAY * dt)
     const flare = warmPulse * warmPulse
 
-    body.inner.material.opacity = glow + flare * 0.3
-    body.outer.material.opacity = 0.2 + Math.min(speed / 8, 1) * 0.12 + flare * 0.26
+    // Never scaled to zero: she is the player, and must stay findable at noon.
+    const glowScale = 0.38 + 0.62 * night
+    // The lamp goes much further down — a point light on the grass in daylight
+    // does nothing but wash out the colour it lands on.
+    const lampScale = 0.12 + 0.88 * night
+
+    body.inner.material.opacity = (glow + flare * 0.3) * glowScale
+    body.outer.material.opacity = (0.2 + Math.min(speed / 8, 1) * 0.12 + flare * 0.26) * glowScale
     body.outer.scale.setScalar(3.4 + flare * 2.1) // Halo swells with the flare.
-    body.lamp.intensity = 12 + Math.min(speed / 8, 1) * 6 + flare * 20
+    body.lamp.intensity = (12 + Math.min(speed / 8, 1) * 6 + flare * 20) * lampScale
     body.lamp.color.copy(haloColor).lerp(warmColor, flare)
 
     // Sample by DISTANCE, not by time. On a timer, hovering stacks all 48 points
@@ -280,7 +289,7 @@ export function createFirefly(scene) {
 
     // Fade the whole wisp out when she settles, so a frozen streak doesn't hang
     // in the air behind a hovering firefly.
-    const target = THREE.MathUtils.clamp(velocity.length() / 2.5, 0, 1)
+    const target = THREE.MathUtils.clamp(velocity.length() / 2.5, 0, 1) * glowScale
     const material = trail.points.material
     material.opacity += (target - material.opacity) * (1 - Math.exp(-3 * dt))
   }

@@ -32,11 +32,23 @@ function createSky() {
       uniform vec3 topColor;
       uniform vec3 horizonColor;
       varying vec3 vDir;
+
       void main() {
-        // pow() keeps the lavender band low and tight to the horizon instead of
+        // pow() keeps the colour band low and tight to the horizon instead of
         // washing halfway up the sky.
         float h = pow(smoothstep(-0.15, 0.72, vDir.y), 0.85);
         gl_FragColor = vec4(mix(horizonColor, topColor, h), 1.0);
+
+        // A ShaderMaterial does not run three's output pipeline on its own.
+        // Without these the sky is written as linear values into an sRGB buffer,
+        // which crushes the mid channels and turns any saturated colour into a
+        // screaming one — the first sunset came out as flat red.
+        //
+        // Only the _fragment chunks belong here. Three already injects the
+        // matching _pars_fragment declarations into every fragment shader, so
+        // including those too is a redefinition error and the shader goes black.
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }
     `,
   })
@@ -97,10 +109,20 @@ export function createWorld(scene) {
   return {
     groundHeightAt,
     lights,
+    // Handed to sky.js, which drives all of these together so the mood never
+    // comes apart. Nothing else should write to them.
+    skyMaterial: sky.material,
+    fog: scene.fog,
 
-    /** Slow shared breathing on the mushroom halos. One uniform, no geometry work. */
-    update(elapsed) {
-      glowMaterial.opacity = 0.34 + Math.sin(elapsed * 0.7) * 0.08
+    /**
+     * Slow shared breathing on the mushroom halos. One uniform, no geometry work.
+     * @param {number} night 0 by day, 1 at midnight — the glow rides this so the
+     *        mushrooms go quiet in daylight and come alive after dark, without
+     *        anyone hand-tuning a second set of numbers.
+     */
+    update(elapsed, night = 1) {
+      const breath = 0.34 + Math.sin(elapsed * 0.7) * 0.08
+      glowMaterial.opacity = breath * (0.16 + 0.84 * night)
     },
   }
 }

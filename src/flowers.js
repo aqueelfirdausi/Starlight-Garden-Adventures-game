@@ -28,6 +28,8 @@ const BLINK_MIN = 2.6
 const BLINK_MAX = 7.5
 
 const HEAD_TILT = 0.6 // Tips the face forward so it looks at her, not the sky.
+const GAZE_TIME = 2.6 // Full look-up-and-back when a constellation arrives.
+const GAZE_LIFT = 0.85 // Radians of extra tilt back. Enough to clearly face the sky.
 const PETAL_CLOSED = -1.45 // Radians: petals stand upright, forming a bud.
 const PETAL_OPEN = -0.28 // Laid back and slightly raised, like a real bloom.
 
@@ -54,6 +56,9 @@ export function createFlowers(scene, { state, onBloom, capacity = 14 } = {}) {
   scene.add(stems, petals, centres, eyes, mouths)
 
   const flowers = []
+
+  // Counts down when a constellation arrives and the whole garden looks up.
+  let gaze = 0
 
   // Scratch objects, reused every frame for every flower. Allocating matrices
   // inside the loop would make the garden garbage-collect as it grows.
@@ -99,6 +104,9 @@ export function createFlowers(scene, { state, onBloom, capacity = 14 } = {}) {
       blinking: false,
       blinkT: 0,
       pendingBloom: false,
+      // Staggered so the garden looks up as a ripple, not as one machine.
+      gazeDelay: Math.random() * 0.55,
+      headPos: new THREE.Vector3(),
     }
 
     const index = flowers.length
@@ -183,6 +191,10 @@ export function createFlowers(scene, { state, onBloom, capacity = 14 } = {}) {
   }
 
   function update(dt, elapsed) {
+    // GAZE_TIME is the full look-up-and-back arc, shared by every flower but
+    // entered at its own moment via gazeDelay.
+    if (gaze > 0) gaze = Math.max(0, gaze - dt)
+
     for (let i = 0; i < flowers.length; i++) {
       const flower = flowers[i]
       const { growth, openness, headScale, lean, waveSway, wave } = advance(flower, dt)
@@ -204,10 +216,16 @@ export function createFlowers(scene, { state, onBloom, capacity = 14 } = {}) {
       stems.setMatrixAt(i, mOut)
 
       headPos.set(0, stemLength * STEM_TIP, 0).applyQuaternion(stemQuat).add(flower.base)
+      flower.headPos.copy(headPos) // Published for the celebration bursts.
+
+      // Looking up at a new constellation: tipping the head back means reducing
+      // the forward tilt. Each flower runs the arc on its own small delay.
+      const gazeT = gaze - flower.gazeDelay
+      const lookUp = gazeT > 0 ? Math.sin((gazeT / GAZE_TIME) * Math.PI) * GAZE_LIFT : 0
 
       // Head inherits the stem's lean, then turns to face her and tips forward.
       // Applied in this order so the tilt follows the yaw instead of the world.
-      localEuler.set(HEAD_TILT, flower.yaw, 0)
+      localEuler.set(HEAD_TILT - lookUp, flower.yaw, 0)
       localQuat.setFromEuler(localEuler)
       headQuat.copy(stemQuat).multiply(localQuat)
 
@@ -274,6 +292,17 @@ export function createFlowers(scene, { state, onBloom, capacity = 14 } = {}) {
   return {
     plant,
     update,
+
+    /** The whole garden tips its head back to look at the sky. */
+    lookUp() {
+      gaze = GAZE_TIME + 0.55 // Longest gazeDelay, so the last flower still gets a full arc.
+    },
+
+    /** Live head positions, for effects that want to fire at each flower. */
+    get heads() {
+      return flowers.map((f) => f.headPos)
+    },
+
     get count() {
       return flowers.length
     },

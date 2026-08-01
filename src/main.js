@@ -10,6 +10,8 @@ import { createCollectibles } from './collectibles.js'
 import { createGardenState } from './state.js'
 import { createPatches, PATCH_COUNT } from './patches.js'
 import { createFlowers } from './flowers.js'
+import { createSkyCycle } from './sky.js'
+import { createConstellations } from './constellations.js'
 
 /**
  * Bootstrap: renderer, camera, resize, frame loop, fps readout.
@@ -76,6 +78,26 @@ const patches = createPatches(scene, {
   },
 })
 
+// The cycle drives the world's existing sky material, lights and fog. It never
+// creates or destroys a light — it only moves and recolours the one Phase 1 built.
+const sky = createSkyCycle(scene, {
+  skyMaterial: world.skyMaterial,
+  lights: world.lights,
+  fog: world.fog,
+})
+
+// Earned by planting. When one arrives the whole garden reacts at once: light
+// swells, every flower tips its head back, and each one throws a burst.
+const constellations = createConstellations(scene, {
+  state,
+  onReveal() {
+    sky.celebrate()
+    flowers.lookUp()
+    firefly.pulse()
+    for (const head of flowers.heads) effects.burst(head, COLORS.flowerCentre)
+  },
+})
+
 // Screen tap -> world ray. Reused every tap; a Raycaster per touch would be
 // garbage for no reason.
 const raycaster = new THREE.Raycaster()
@@ -133,7 +155,7 @@ resize()
 if (import.meta.env.DEV) {
   window.__garden = {
     renderer, scene, camera, world, firefly, controls, cameraRig,
-    collectibles, effects, state, patches, flowers,
+    collectibles, effects, state, patches, flowers, sky, constellations,
   }
 }
 
@@ -154,14 +176,20 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(timer.getDelta(), 1 / 20)
   elapsed += dt
 
+  // Sky first: everything downstream reads its night value in the same frame,
+  // so glows and lighting can never be one frame out of step with the sky.
+  sky.update(dt, elapsed)
+  const night = sky.night
+
   controls.update(dt)
-  firefly.update(dt, elapsed, controls)
+  firefly.update(dt, elapsed, controls, night)
   collectibles.update(dt, elapsed, firefly.position)
   patches.update(dt, elapsed, firefly.position)
   flowers.update(dt, elapsed)
+  constellations.update(dt, night)
   effects.update(dt)
   cameraRig.update(dt)
-  world.update(elapsed)
+  world.update(elapsed, night)
 
   renderer.render(scene, camera)
 

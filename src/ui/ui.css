@@ -1,0 +1,82 @@
+/* Shared tokens and the overlay layer itself. Each piece of UI brings its own
+   stylesheet next to its own module; this file is only what they all agree on.
+
+   Everything in src/ui is HTML and CSS over the canvas. Nothing here is drawn
+   in 3D, nothing here adds a render pass, and nothing here runs a compositor
+   effect over the full-screen canvas — a backdrop blur across a live WebGL
+   surface is the one cheap-looking trick that is genuinely expensive on a
+   tablet, so the start screen dims rather than blurs. */
+
+:root {
+  /* Straight out of palette.js, so the UI and the meadow are the same game. */
+  --ui-gold: #ffd98a;
+  --ui-lavender: #b9b1e8;
+  --ui-mint: #bfe3c0;
+  --ui-blush: #ffb6d5;
+  --ui-dusk: #1e2a55;
+  --ui-ink: #fffaf0;
+
+  /* Touch geometry. 72px is the floor for anything she has to hit; the buttons
+     below are all comfortably above it. */
+  --ui-tap-min: 72px;
+
+  --ui-safe-top: env(safe-area-inset-top, 0px);
+  --ui-safe-right: env(safe-area-inset-right, 0px);
+  --ui-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --ui-safe-left: env(safe-area-inset-left, 0px);
+
+  /* One easing for the whole overlay. Slow out, no bounce. */
+  --ui-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The overlay layer. Sits above #ui (the Flutter Up button) so the start screen
+   and the pause panel cover it, and passes pointers straight through wherever
+   there is no actual control. */
+#shell {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  color: var(--ui-ink);
+}
+
+#shell button {
+  font: inherit;
+  color: inherit;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Flutter Up and the HUD only exist once she has started. Written as
+   :not(.playing) rather than a .hidden class so the default state of the
+   document — before a single line of JavaScript runs — is already correct. */
+body:not(.playing) #ui,
+/* #flutter sets pointer-events: auto to opt back in over the #ui layer, so
+   switching the layer off is not enough — the child has to be named too. */
+body:not(.playing) #flutter {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#ui {
+  transition: opacity 700ms var(--ui-ease);
+}
+
+/* The debug readout moves to the bottom-left: the top-left corner is the pause
+   button's now, and stacking a frame counter under it would be the one thing on
+   screen that looks like a mistake. */
+#fps {
+  top: auto;
+  bottom: calc(8px + var(--ui-safe-bottom));
+}
+
+/* Reduced motion is handled per-file rather than with one blanket rule, because
+   not every animation here is decoration. The pause button's filling ring is
+   the only feedback that a hold is being counted, and switching it off would
+   leave a child pressing a button that looks like it is doing nothing. */

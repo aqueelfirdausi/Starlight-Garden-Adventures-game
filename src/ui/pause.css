@@ -1,0 +1,277 @@
+/* The pause button and the panel it opens.
+
+   Top-left, which is the far diagonal from Flutter Up in the bottom-right, and
+   the one corner a tablet held in two hands has no fingers anywhere near. */
+
+.pause-btn {
+  position: absolute;
+  top: calc(16px + var(--ui-safe-top));
+  left: calc(16px + var(--ui-safe-left));
+
+  width: 76px; /* Over the 72px floor, and no bigger — it is not the main event. */
+  height: 76px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(22, 28, 56, 0.32);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 700ms var(--ui-ease),
+    transform 260ms var(--ui-ease);
+}
+
+body.playing .pause-btn {
+  opacity: 0.72; /* Findable, but never competing with the garden. */
+  pointer-events: auto;
+}
+
+/* Visible press feedback, required of every control in this game. It arrives
+   the instant the finger lands, before the hold has been counted at all. */
+.pause-btn.holding {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.pause-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg); /* Fill clockwise from the top. */
+  fill: none;
+  stroke-linecap: round;
+}
+
+.pause-ring circle {
+  stroke-width: 4;
+  /* r=33 in a 76 box: circumference 207.3, rounded up so a full ring closes. */
+  stroke-dasharray: 208;
+}
+
+.ring-track {
+  stroke: rgba(255, 255, 255, 0.22);
+}
+
+/* The heart of "not a hair-trigger": the ring is the hold, drawn. It takes the
+   full HOLD_MS to close, and springs back if she lets go early — so a knuckle
+   brushing the corner shows a flicker of arc and nothing else. */
+.ring-fill {
+  stroke: var(--ui-gold);
+  stroke-dashoffset: 208;
+  transition: stroke-dashoffset 300ms var(--ui-ease);
+}
+
+.pause-btn.holding .ring-fill {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 650ms linear; /* Must match HOLD_MS in pause.js. */
+}
+
+/* Two bars. No word, because "pause" is a word she would have to be taught. */
+.pause-glyph {
+  display: flex;
+  gap: 6px;
+}
+
+.pause-glyph i {
+  display: block;
+  width: 6px;
+  height: 22px;
+  border-radius: 3px;
+  background: var(--ui-ink);
+  box-shadow: 0 1px 6px rgba(20, 16, 44, 0.5);
+}
+
+/* --- The panel ---------------------------------------------------------- */
+
+.panel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 420ms var(--ui-ease),
+    visibility 0s linear 420ms;
+}
+
+.panel.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto; /* Also what stops steering and Flutter Up while paused. */
+  transition:
+    opacity 420ms var(--ui-ease),
+    visibility 0s;
+}
+
+/* Dims the garden without hiding it. The meadow keeps drifting underneath — the
+   sky keeps turning, the flowers keep breathing — because a hard freeze is the
+   moment a living place turns back into a screen. */
+.panel-veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 46%,
+    rgba(16, 20, 44, 0.42),
+    rgba(12, 15, 36, 0.72) 78%
+  );
+}
+
+.panel-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: min(420px, 100%);
+  transform: translateY(14px) scale(0.97);
+  transition: transform 420ms var(--ui-ease);
+}
+
+.panel.open .panel-card {
+  transform: none;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  color: rgba(255, 250, 240, 0.9);
+  text-shadow: 0 2px 16px rgba(20, 16, 44, 0.7);
+}
+
+.btn-resume {
+  width: 100%;
+  min-height: 92px;
+  padding: 0 28px;
+  border-radius: 46px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-shadow: 0 1px 8px rgba(40, 30, 70, 0.55);
+
+  background: radial-gradient(
+    circle at 50% 34%,
+    rgba(255, 233, 189, 0.55),
+    rgba(185, 177, 232, 0.34) 66%,
+    rgba(185, 177, 232, 0.2)
+  );
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow:
+    0 0 26px rgba(255, 217, 138, 0.28),
+    inset 0 0 20px rgba(255, 255, 255, 0.22);
+  transition:
+    transform 220ms var(--ui-ease),
+    box-shadow 220ms ease;
+}
+
+.btn-resume::before {
+  /* A play triangle, so the button reads before the words do. */
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 17px solid var(--ui-ink);
+  border-top: 11px solid transparent;
+  border-bottom: 11px solid transparent;
+}
+
+.btn-resume:active {
+  transform: scale(0.965);
+  box-shadow:
+    0 0 40px rgba(255, 217, 138, 0.5),
+    inset 0 0 26px rgba(255, 255, 255, 0.34);
+}
+
+/* --- High-contrast toggle ----------------------------------------------- */
+
+.btn-contrast {
+  width: 100%;
+  min-height: var(--ui-tap-min);
+  padding: 0 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(22, 28, 56, 0.44);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  font-size: 18px;
+  font-weight: 600;
+  transition:
+    transform 220ms var(--ui-ease),
+    border-color 220ms ease;
+}
+
+.btn-contrast:active {
+  transform: scale(0.975);
+}
+
+.btn-contrast[aria-checked='true'] {
+  border-color: rgba(255, 233, 189, 0.7);
+}
+
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 68px;
+  height: 36px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 300ms ease;
+}
+
+.btn-contrast[aria-checked='true'] .switch-track {
+  background: rgba(255, 217, 138, 0.62);
+}
+
+.switch-knob {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ui-ink);
+  box-shadow: 0 2px 8px rgba(14, 18, 40, 0.5);
+  transition: transform 300ms var(--ui-ease);
+}
+
+.btn-contrast[aria-checked='true'] .switch-knob {
+  transform: translateX(32px);
+}
+
+/* Landscape on a short screen: the card would otherwise run off the bottom. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .panel-card {
+    gap: 14px;
+  }
+  .panel-title {
+    font-size: 21px;
+  }
+  .btn-resume {
+    min-height: 76px;
+    font-size: 20px;
+  }
+}

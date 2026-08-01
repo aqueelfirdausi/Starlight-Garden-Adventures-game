@@ -27,6 +27,7 @@ const PLANT_RADIUS = 2.6
 const TAP_RADIUS = 2.0
 
 const GLOW_FADE = 2.2 // How fast the invitation eases in and out.
+const GLOW_SIZE = 1.5 // World units. High contrast grows the halo on top of this.
 const TAU = Math.PI * 2
 
 /**
@@ -143,7 +144,7 @@ export function createPatches(scene, { state, onPlant } = {}) {
     glowGeometry,
     new THREE.PointsMaterial({
       map: getSoftDotTexture(),
-      size: 1.5,
+      size: GLOW_SIZE,
       sizeAttenuation: true,
       vertexColors: true,
       transparent: true,
@@ -156,8 +157,16 @@ export function createPatches(scene, { state, onPlant } = {}) {
 
   scene.add(dirt, glow)
 
-  const glowColor = new THREE.Color(COLORS.patchGlow)
+  const glowColor = new THREE.Color(COLORS.patchGlow) // Scratch; lerped by contrast.
   let glowStrength = 0 // Eased, so the invitation never blinks on or off.
+
+  // High-contrast mode pulls the dirt DOWN and the halo up. Lifting the dirt
+  // would walk it toward the moss's own brightness and lose the edge entirely;
+  // darkening it while the ambient fill rises widens the gap from both sides.
+  const baseGlow = new THREE.Color(COLORS.patchGlow)
+  const hiGlow = new THREE.Color(COLORS.patchGlowHi)
+  let contrast = 0
+  let contrastTarget = 0
 
   function plant(patch) {
     if (patch.planted) return false
@@ -170,11 +179,16 @@ export function createPatches(scene, { state, onPlant } = {}) {
     return true
   }
 
-  function update(dt, elapsed, fireflyPosition) {
+  /**
+   * @param {boolean} live false while the start screen or pause panel is up.
+   *        The invitation keeps pulsing; drifting over a patch just doesn't
+   *        spend a seed.
+   */
+  function update(dt, elapsed, fireflyPosition, live = true) {
     const carrying = state ? state.seedsHeld > 0 : false
 
     // Proximity planting.
-    if (carrying && fireflyPosition) {
+    if (live && carrying && fireflyPosition) {
       for (let i = 0; i < patches.length; i++) {
         const patch = patches[i]
         if (patch.planted) continue
@@ -190,10 +204,22 @@ export function createPatches(scene, { state, onPlant } = {}) {
 
     glowStrength += ((carrying ? 1 : 0) - glowStrength) * (1 - Math.exp(-GLOW_FADE * dt))
 
+    // Eased alongside everything else so the toggle reads as the garden
+    // changing its mind rather than as a setting being applied. The material
+    // writes are skipped once it settles, so an untouched toggle costs nothing.
+    if (Math.abs(contrastTarget - contrast) > 0.0005) {
+      contrast += (contrastTarget - contrast) * (1 - Math.exp(-GLOW_FADE * dt))
+      dirt.material.color.setScalar(1 - contrast * 0.3)
+      glow.material.size = GLOW_SIZE + contrast * 0.7
+      glowColor.copy(baseGlow).lerp(hiGlow, contrast)
+    }
+
     // Slow shared pulse. Faint on purpose: an invitation, not a marker. These
     // numbers are low because additive blending over dark dirt reads far
     // brighter than the colour suggests — at 0.5 it looked like a spotlight.
-    const pulse = (0.34 + Math.sin(elapsed * 1.15) * 0.15) * glowStrength
+    // High contrast raises the floor as well as the peak, so the invitation is
+    // continuously visible rather than only at the top of its breath.
+    const pulse = (0.34 + contrast * 0.5 + Math.sin(elapsed * 1.15) * 0.15) * glowStrength
     for (let i = 0; i < patches.length; i++) {
       const lit = patches[i].planted ? 0 : pulse
       glowColors[i * 3 + 0] = glowColor.r * lit
@@ -232,6 +258,11 @@ export function createPatches(scene, { state, onPlant } = {}) {
     plantAt(raycaster) {
       const patch = pick(raycaster)
       return patch ? plant(patch) : false
+    },
+
+    /** High-contrast mode: darker dirt, a bigger and continuously lit halo. */
+    setContrast(on) {
+      contrastTarget = on ? 1 : 0
     },
   }
 }

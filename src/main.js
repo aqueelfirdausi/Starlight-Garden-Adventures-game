@@ -12,12 +12,14 @@ import { createPatches, PATCH_COUNT } from './patches.js'
 import { createFlowers } from './flowers.js'
 import { createSkyCycle } from './sky.js'
 import { createConstellations } from './constellations.js'
+import { createContrast } from './contrast.js'
+import { createUI } from './ui/shell.js'
 
 /**
  * Bootstrap: renderer, camera, resize, frame loop, fps readout.
  *
- * Everything game-shaped lives in the four modules above. This file only wires
- * them together, so it can be swapped for a different host without touching them.
+ * Everything game-shaped lives in the modules above. This file only wires them
+ * together, so it can be swapped for a different host without touching them.
  */
 
 const canvas = document.getElementById('scene')
@@ -128,6 +130,24 @@ const controls = createControls({
 })
 const cameraRig = createCameraRig(camera, firefly.position)
 
+// One switch, four places it lands. Each module decides for itself what "easier
+// to see" means for the thing it draws.
+const contrast = createContrast([sky, firefly, collectibles, patches])
+
+// The HTML overlay: start screen, HUD, pause. It never renders into the scene —
+// it only tells the loop below how fast time should run and whether she is
+// actually playing.
+const ui = createUI({
+  state,
+  contrast,
+  onPause() {
+    // The panel covers the canvas, so no pointerup will ever arrive for a thumb
+    // that was mid-hold on Flutter Up. Drop it here or she resumes to a firefly
+    // climbing on its own.
+    controls.release()
+  },
+})
+
 function resize() {
   const width = window.innerWidth
   const height = window.innerHeight
@@ -156,6 +176,7 @@ if (import.meta.env.DEV) {
   window.__garden = {
     renderer, scene, camera, world, firefly, controls, cameraRig,
     collectibles, effects, state, patches, flowers, sky, constellations,
+    contrast, ui,
   }
 }
 
@@ -173,7 +194,14 @@ renderer.setAnimationLoop(() => {
   timer.update()
   // Still clamped on top of Timer's visibility handling: a single slow frame on
   // the tablet would otherwise step the firefly a long way in one go.
-  const dt = Math.min(timer.getDelta(), 1 / 20)
+  const real = Math.min(timer.getDelta(), 1 / 20)
+
+  // The overlay runs on real time so that pausing doesn't slow down the pause
+  // itself. Everything below it runs on garden time, which the shell eases down
+  // to a third while the panel is open — slowed, never stopped.
+  ui.update(real)
+  const dt = real * ui.timeScale
+  const live = ui.live
   elapsed += dt
 
   // Sky first: everything downstream reads its night value in the same frame,
@@ -183,8 +211,8 @@ renderer.setAnimationLoop(() => {
 
   controls.update(dt)
   firefly.update(dt, elapsed, controls, night)
-  collectibles.update(dt, elapsed, firefly.position)
-  patches.update(dt, elapsed, firefly.position)
+  collectibles.update(dt, elapsed, firefly.position, live)
+  patches.update(dt, elapsed, firefly.position, live)
   flowers.update(dt, elapsed)
   constellations.update(dt, night)
   effects.update(dt)
@@ -194,7 +222,9 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera)
 
   fpsFrames++
-  fpsClock += dt
+  // Real time, not garden time: measuring frames against a clock the pause
+  // slows down would report a third more fps the moment she paused.
+  fpsClock += real
   if (fpsClock >= 0.5) {
     fpsLabel.textContent = `${Math.round(fpsFrames / fpsClock)} fps · ${renderer.info.render.calls} calls`
     fpsFrames = 0

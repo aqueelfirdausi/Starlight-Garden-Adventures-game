@@ -129,6 +129,12 @@ export function createSkyCycle(scene, { skyMaterial, lights, fog }) {
   let night = 0
   let swell = 0 // Brief celebration boost, spiked by celebrate().
 
+  // High-contrast mode lifts the ambient fill. It rides the SAME keyframe table
+  // as everything else — a multiplier on top of hemiI rather than a fixed
+  // brightness — so midnight still looks like midnight, just readable.
+  let contrast = 0
+  let contrastTarget = 0
+
   function apply(elapsed) {
     // Find the bracketing keyframes. The table ends with a duplicate of the
     // first stop at t=1, so there is no wrap-around case to get wrong.
@@ -157,10 +163,13 @@ export function createSkyCycle(scene, { skyMaterial, lights, fog }) {
 
     sun.color.copy(cSun)
     // The swell brightens everything briefly when a constellation arrives.
-    sun.intensity = sunI * (1 + swell * 0.35)
+    // Contrast lifts the key light a little and the ambient fill a lot: raising
+    // the sun instead would deepen every shadow, which is the opposite of what
+    // "easier to see" means on a meadow at night.
+    sun.intensity = sunI * (1 + swell * 0.35) * (1 + contrast * 0.18)
     hemi.color.copy(cHemiSky)
     hemi.groundColor.copy(cHemiGround)
-    hemi.intensity = hemiI * (1 + swell * 0.5)
+    hemi.intensity = hemiI * (1 + swell * 0.5) * (1 + contrast * 0.6)
 
     // --- Where the light comes from ---------------------------------------
     // t=0.25 is sunrise, so shifting by a quarter turn puts elevation at zero
@@ -201,7 +210,13 @@ export function createSkyCycle(scene, { skyMaterial, lights, fog }) {
     update(dt, elapsed) {
       t = (t + dt / CYCLE_SECONDS) % 1
       swell = Math.max(0, swell - dt * 0.7) // ~1.4s falloff.
+      contrast += (contrastTarget - contrast) * (1 - Math.exp(-3.5 * dt))
       apply(elapsed)
+    },
+
+    /** High-contrast mode: brighter ambient fill, same time of day. */
+    setContrast(on) {
+      contrastTarget = on ? 1 : 0
     },
 
     /** 0 in daylight, 1 at midnight. Glows ride this so they suit every hour. */

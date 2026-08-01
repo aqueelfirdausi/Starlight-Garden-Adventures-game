@@ -32,7 +32,10 @@ export function createGrass(random) {
     new THREE.MeshStandardMaterial({ color: COLORS.grass, roughness: 1, metalness: 0 }),
     GRASS_COUNT
   )
-  mesh.castShadow = false // 2700 casters would double the shadow pass for nothing.
+  // Deliberately opted out of the shadow pass: 2700 casters would roughly double
+  // it, and at this blade size the shadows they threw would be invisible anyway.
+  // The mushrooms below are the only objects in the scene that cast.
+  mesh.castShadow = false
   mesh.receiveShadow = false
 
   const dummy = new THREE.Object3D()
@@ -97,8 +100,9 @@ export function createMushrooms(random) {
     new THREE.MeshStandardMaterial({ color: COLORS.mushroomStem, roughness: 0.85, metalness: 0 }),
     MUSHROOM_COUNT
   )
-  // The only shadow casters in the scene — 2 extra draw calls in the shadow
-  // pass, and they are what stops the mushrooms looking like stickers.
+  // The only objects in the scene that cast into the shadow map, lit by the one
+  // shadow-casting light in world.js — 2 extra draw calls in the shadow pass,
+  // and they are what stops the mushrooms looking like stickers.
   caps.castShadow = true
   stems.castShadow = true
 

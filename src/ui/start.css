@@ -1,0 +1,158 @@
+/* The start screen. One title, one button, and the garden already running
+   behind it — dimmed, never hidden, so she watches it breathe before she
+   touches anything.
+
+   Dimmed rather than blurred on purpose: a backdrop-filter blur across a live
+   full-screen WebGL canvas is a full-resolution compositor pass every frame,
+   which is exactly the kind of cost the performance budget rules out. A veil
+   composites once and costs nothing after that. */
+
+.start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(28px, 7vh, 64px);
+
+  padding:
+    calc(24px + var(--ui-safe-top))
+    calc(24px + var(--ui-safe-right))
+    calc(24px + var(--ui-safe-bottom))
+    calc(24px + var(--ui-safe-left));
+
+  pointer-events: auto;
+  transition: opacity 900ms var(--ui-ease);
+}
+
+/* Set the moment Start is pressed. The whole screen fades off the garden
+   rather than cutting, and is removed from the DOM when the fade finishes. */
+.start.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.start-veil {
+  position: absolute;
+  inset: 0;
+  /* Lighter in the middle, heavier at the edges: the meadow stays legible where
+     she is looking and the text stays legible everywhere. */
+  background: radial-gradient(
+    circle at 50% 52%,
+    rgba(16, 20, 44, 0.28),
+    rgba(12, 15, 36, 0.62) 82%
+  );
+}
+
+.title {
+  position: relative;
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+  font-size: clamp(30px, 7.4vw, 62px);
+  line-height: 1.12;
+  letter-spacing: 1.5px;
+  color: #fff6e2;
+  text-shadow:
+    0 2px 20px rgba(20, 16, 44, 0.75),
+    0 0 44px rgba(255, 217, 138, 0.35);
+}
+
+/* One word per line, each drifting on its own clock. Three offset sine waves
+   is what makes it float instead of bobbing as a single block. */
+.title span {
+  display: block;
+  animation: title-drift 7.5s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -2.5s);
+}
+
+@keyframes title-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  33% {
+    transform: translate3d(4px, -7px, 0);
+  }
+  66% {
+    transform: translate3d(-4px, 5px, 0);
+  }
+}
+
+.start-btn {
+  position: relative;
+  min-height: 104px; /* Well over the 72px floor — this is the one thing to hit. */
+  min-width: min(340px, 84vw);
+  padding: 0 44px;
+  border-radius: 52px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+
+  font-size: clamp(21px, 4.6vw, 27px);
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-shadow: 0 1px 10px rgba(40, 30, 70, 0.6);
+
+  background: radial-gradient(
+    circle at 50% 32%,
+    rgba(255, 240, 205, 0.62),
+    rgba(185, 177, 232, 0.36) 64%,
+    rgba(185, 177, 232, 0.22)
+  );
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+
+  /* The slow glow-pulse. Sits on box-shadow and transform only, so it stays on
+     the compositor and never triggers layout. */
+  animation: start-pulse 3.6s ease-in-out infinite;
+  transition:
+    transform 200ms var(--ui-ease),
+    box-shadow 200ms ease;
+}
+
+@keyframes start-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 28px rgba(255, 217, 138, 0.34),
+      inset 0 0 22px rgba(255, 255, 255, 0.26);
+  }
+  50% {
+    transform: scale(1.035);
+    box-shadow:
+      0 0 58px rgba(255, 217, 138, 0.62),
+      0 0 110px rgba(255, 196, 107, 0.26),
+      inset 0 0 30px rgba(255, 255, 255, 0.4);
+  }
+}
+
+/* Visible press feedback, same as every other control in the game. */
+.start-btn:active {
+  animation: none;
+  transform: scale(0.97);
+  box-shadow:
+    0 0 64px rgba(255, 217, 138, 0.7),
+    inset 0 0 34px rgba(255, 255, 255, 0.46);
+}
+
+/* Landscape on a short tablet: less air, so the title and button both fit
+   above the fold without scrolling — the page can never scroll. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .start {
+    gap: clamp(18px, 4vh, 32px);
+  }
+  .title {
+    font-size: clamp(26px, 5.4vh, 44px);
+  }
+  .start-btn {
+    min-height: 84px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title span,
+  .start-btn {
+    animation: none;
+  }
+}

@@ -1,0 +1,132 @@
+/* The gentle record of what she has done. Top-right: the opposite diagonal to
+   Flutter Up, so it can never sit under the hand that is holding it, and high
+   enough that it is out of the flight path she is actually watching.
+
+   Not a touch target — the whole thing is pointer-events: none — so the 72px
+   rule does not apply and the chips stay small on purpose. */
+
+.hud {
+  position: absolute;
+  top: calc(12px + var(--ui-safe-top));
+  right: calc(14px + var(--ui-safe-right));
+
+  display: flex;
+  gap: 8px;
+
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 900ms var(--ui-ease),
+    transform 900ms var(--ui-ease);
+}
+
+body.playing .hud {
+  opacity: 1;
+  transform: none;
+}
+
+.hud-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+
+  min-width: 54px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+
+  /* Semi-transparent, and deliberately dark rather than light: the meadow is
+     dark, and a pale chip would be the brightest thing on screen. */
+  background: rgba(22, 28, 56, 0.34);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  box-shadow: 0 2px 12px rgba(12, 16, 38, 0.25);
+
+  transition: transform 420ms var(--ui-ease);
+}
+
+.hud-icon {
+  display: block;
+  width: 19px;
+  height: 19px;
+  flex: none;
+}
+
+.hud-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.hud-value {
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums; /* So a 9 -> 10 doesn't shove the chip sideways. */
+  letter-spacing: 0.2px;
+  color: var(--ui-ink);
+  text-shadow: 0 1px 5px rgba(20, 16, 44, 0.6);
+}
+
+/* Icons carry the meaning, so each one keeps its own colour from the meadow.
+   Numbers, never labels — she is six, and a word she has to read is a word
+   between her and the garden. */
+.hud-chip[data-key='petals'] .hud-icon {
+  color: var(--ui-gold);
+}
+.hud-chip[data-key='seeds'] .hud-icon {
+  color: var(--ui-blush);
+}
+.hud-chip[data-key='flowers'] .hud-icon {
+  color: var(--ui-mint);
+}
+
+/* The soft pulse when a number changes. One swell and back — no flash, no
+   colour change, nothing that reads as a score going up.
+
+   `forwards` looks pointless when 0% and 100% are identical, and visually it
+   is. It is here so the finished animation stays attached to the element,
+   which is what lets hud.js replay it by rewinding rather than by removing and
+   re-adding the class — a round trip that would cost a forced reflow. */
+.hud-chip.bump {
+  animation: hud-bump 520ms var(--ui-ease) forwards;
+}
+
+@keyframes hud-bump {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 2px 12px rgba(12, 16, 38, 0.25);
+  }
+  38% {
+    transform: scale(1.13);
+    box-shadow: 0 2px 22px rgba(255, 233, 189, 0.4);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 2px 12px rgba(12, 16, 38, 0.25);
+  }
+}
+
+/* Portrait on a phone-sized screen: the three chips still fit, but they get a
+   little tighter so they stay clear of the middle of the sky. */
+@media (max-width: 420px) {
+  .hud-chip {
+    min-width: 46px;
+    padding: 5px 8px 5px 7px;
+    gap: 4px;
+  }
+  .hud-value {
+    font-size: 17px;
+  }
+  .hud-icon {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-chip.bump {
+    animation: none;
+  }
+}

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
-import { getSoftDotTexture } from './softdot.js'
 import { groundHeightAt, MEADOW_RADIUS } from './terrain.js'
+import { createBody, createTrail, HALO, HALO_SCALE, TRAIL_POINTS, WARM } from './fireflyparts.js'
 
 /**
  * The player: a warm gold orb with a soft halo and a short wisp of light behind it.
@@ -8,6 +8,8 @@ import { groundHeightAt, MEADOW_RADIUS } from './terrain.js'
  * Movement is deliberately heavy and slippery — acceleration in, exponential drag
  * out — so it coasts to a stop rather than stopping dead. The brief was "moving
  * something through warm water" and every constant below is tuned for that.
+ *
+ * What she is built from lives in fireflyparts.js; this file is only how she moves.
  */
 
 const ACCEL = 20 // Horizontal push from a fully extended drag.
@@ -28,103 +30,17 @@ const FLOOR_DAMP = 15.5
 const CEILING_SPRING = 18
 const CEILING_DAMP = 8.5
 
-const TRAIL_POINTS = 48
 // Spacing between trail samples, in world units rather than seconds. See the
 // sampling loop in update() for why this is not a timer.
 const TRAIL_MIN_STEP = 0.085
 
-// Deeply saturated amber rather than pale gold. Additive sprites stack toward
-// white, so the base colour has to start well short of it to survive.
-const GOLD = 0xffc247
-const HALO = 0xffa53d
-// Where the glow shifts to on collection — paler and warmer than the resting
-// amber, so a pickup reads as a flare of warmth rather than just "brighter".
-const WARM = 0xffe0ad
-const PULSE_DECAY = 1.7 // ~0.6s for the flare to fall away.
+const PULSE_DECAY = 1.7 // ~0.6s for the collection flare to fall away.
 
-function createBody() {
-  const group = new THREE.Group()
-
-  // Slightly egg-shaped rather than a ball: a sphere shows no rotation, so the
-  // tilt-into-travel would be completely invisible on one.
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.17, 14, 10),
-    new THREE.MeshBasicMaterial({ color: GOLD, fog: false })
-  )
-  core.scale.set(0.92, 0.82, 1.25)
-
-  // Two stacked sprites fake a bloom falloff: a tight bright centre inside a
-  // wide soft one. Real bloom is a post-process, which Phase 1 doesn't have.
-  const texture = getSoftDotTexture()
-  const inner = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: texture,
-      color: GOLD,
-      transparent: true,
-      opacity: 0.85,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      fog: false,
-    })
-  )
-  inner.scale.setScalar(1.5)
-
-  const outer = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: texture,
-      color: HALO,
-      transparent: true,
-      opacity: 0.32,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      fog: false,
-    })
-  )
-  outer.scale.setScalar(3.4)
-
-  // Unshadowed, as the budget requires. It exists so the grass lights up as she
-  // passes, which is most of what sells her as a real light source.
-  const lamp = new THREE.PointLight(HALO, 14, 16, 2)
-  lamp.castShadow = false
-
-  group.add(core, inner, outer, lamp)
-  return { group, core, inner, outer, lamp }
-}
-
-function createTrail(startPosition) {
-  const positions = new Float32Array(TRAIL_POINTS * 3)
-  const colors = new Float32Array(TRAIL_POINTS * 3)
-
-  // Seed the whole ring at the spawn point, otherwise every unused slot sits at
-  // the world origin and the first frame shows a bright streak to nowhere.
-  for (let i = 0; i < TRAIL_POINTS; i++) {
-    positions[i * 3 + 0] = startPosition.x
-    positions[i * 3 + 1] = startPosition.y
-    positions[i * 3 + 2] = startPosition.z
-  }
-
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-
-  const points = new THREE.Points(
-    geometry,
-    new THREE.PointsMaterial({
-      map: getSoftDotTexture(),
-      size: 0.44,
-      sizeAttenuation: true,
-      vertexColors: true, // Per-point fade — PointsMaterial has no per-point size.
-      transparent: true,
-      opacity: 0, // Starts invisible; update() fades it in with speed.
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      fog: false,
-    })
-  )
-  points.frustumCulled = false // The ring spans space the bounding sphere lags behind.
-
-  return { points, positions, colors, geometry }
-}
+// High-contrast mode. She is the thing a child's eye has to track across a
+// whole meadow, so this is the largest boost of any of the contrast targets.
+const CONTRAST_GLOW = 0.45 // Extra fraction on the sprite opacities.
+const CONTRAST_LAMP = 0.75 // Extra fraction on the point light.
+const CONTRAST_EASE = 3.5 // Toggling is a fade, not a switch. Nothing here snaps.
 
 export function createFirefly(scene) {
   const position = new THREE.Vector3(0, groundHeightAt(0, 0) + 3.5, 6)
@@ -134,8 +50,6 @@ export function createFirefly(scene) {
   const trail = createTrail(position)
   scene.add(body.group, trail.points)
 
-  const baseColor = new THREE.Color(GOLD)
-  let head = 0
   const lastSample = position.clone()
 
   // Smoothed rotation targets — applied gradually so she banks, never snaps.
@@ -151,25 +65,10 @@ export function createFirefly(scene) {
   const haloColor = new THREE.Color(HALO)
   const warmColor = new THREE.Color(WARM)
 
-  function pushTrailSample(x, y, z) {
-    head = (head + 1) % TRAIL_POINTS
-    trail.positions[head * 3 + 0] = x
-    trail.positions[head * 3 + 1] = y
-    trail.positions[head * 3 + 2] = z
-
-    // Repaint the fade so the newest sample is brightest. 48 points is small
-    // enough that rewriting all of them beats any cleverness.
-    for (let i = 0; i < TRAIL_POINTS; i++) {
-      const age = ((head - i + TRAIL_POINTS) % TRAIL_POINTS) / TRAIL_POINTS
-      const fade = (1 - age) * (1 - age) * 0.95
-      trail.colors[i * 3 + 0] = baseColor.r * fade
-      trail.colors[i * 3 + 1] = baseColor.g * fade
-      trail.colors[i * 3 + 2] = baseColor.b * fade
-    }
-
-    trail.geometry.attributes.position.needsUpdate = true
-    trail.geometry.attributes.color.needsUpdate = true
-  }
+  // 0..1 eased toward contrastTarget, so switching high contrast on mid-flight
+  // reads as the meadow brightening rather than as a light being flicked.
+  let contrast = 0
+  let contrastTarget = 0
 
   /**
    * @param {number} dt      seconds since last frame
@@ -262,15 +161,19 @@ export function createFirefly(scene) {
     warmPulse = Math.max(0, warmPulse - PULSE_DECAY * dt)
     const flare = warmPulse * warmPulse
 
+    contrast += (contrastTarget - contrast) * (1 - Math.exp(-CONTRAST_EASE * dt))
+
     // Never scaled to zero: she is the player, and must stay findable at noon.
-    const glowScale = 0.38 + 0.62 * night
+    const glowScale = (0.38 + 0.62 * night) * (1 + contrast * CONTRAST_GLOW)
     // The lamp goes much further down — a point light on the grass in daylight
     // does nothing but wash out the colour it lands on.
-    const lampScale = 0.12 + 0.88 * night
+    const lampScale = (0.12 + 0.88 * night) * (1 + contrast * CONTRAST_LAMP)
 
     body.inner.material.opacity = (glow + flare * 0.3) * glowScale
     body.outer.material.opacity = (0.2 + Math.min(speed / 8, 1) * 0.12 + flare * 0.26) * glowScale
-    body.outer.scale.setScalar(3.4 + flare * 2.1) // Halo swells with the flare.
+    // Halo swells with the flare, and sits wider in high contrast so the shape
+    // she is chasing is bigger, not just brighter.
+    body.outer.scale.setScalar(HALO_SCALE + flare * 2.1 + contrast * 0.9)
     body.lamp.intensity = (12 + Math.min(speed / 8, 1) * 6 + flare * 20) * lampScale
     body.lamp.color.copy(haloColor).lerp(warmColor, flare)
 
@@ -283,7 +186,7 @@ export function createFirefly(scene) {
     let gap = lastSample.distanceTo(tmp)
     while (gap >= TRAIL_MIN_STEP && guard++ < TRAIL_POINTS) {
       lastSample.lerp(tmp, TRAIL_MIN_STEP / gap) // Advance exactly one step along the path.
-      pushTrailSample(lastSample.x, lastSample.y, lastSample.z)
+      trail.push(lastSample.x, lastSample.y, lastSample.z)
       gap = lastSample.distanceTo(tmp)
     }
 
@@ -303,6 +206,11 @@ export function createFirefly(scene) {
     /** Flare the glow warmer. Called when something is collected. */
     pulse() {
       warmPulse = 1
+    },
+
+    /** High-contrast mode: a stronger, wider glow and a much brighter lamp. */
+    setContrast(on) {
+      contrastTarget = on ? 1 : 0
     },
   }
 }

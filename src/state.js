@@ -29,8 +29,20 @@ export function createGardenState() {
       }
     },
 
+    // Individual getters as well as `counts`, because the HUD samples these
+    // every frame and `counts` builds a fresh object each time it is read.
+    // Three property reads per frame is nothing; 60 short-lived objects a
+    // second is a garbage collector pause in the middle of a bloom.
+    get petals() {
+      return state.petals
+    },
+
     get seedsHeld() {
       return state.seedsHeld
+    },
+
+    get flowers() {
+      return state.flowers
     },
 
     addPetal() {

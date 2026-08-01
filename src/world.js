@@ -64,7 +64,13 @@ function createLights(scene) {
   const hemi = new THREE.HemisphereLight(COLORS.hemiSky, COLORS.hemiGround, 1.15)
   scene.add(hemi)
 
-  // The moon — the one and only shadow caster in the game.
+  // The one light in the game that casts a shadow at all. It is the sun by day
+  // and the moon by night — sky.js moves and recolours this single light rather
+  // than creating a second one. The hemisphere fill above and the firefly's own
+  // lamp both leave castShadow off.
+  //
+  // What it actually casts is only the mushrooms; see createMushrooms() in
+  // props.js for why the grass is deliberately left out of the shadow pass.
   const moon = new THREE.DirectionalLight(COLORS.moon, 1.5)
   moon.position.set(16, 26, 12)
   moon.castShadow = true

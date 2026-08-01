@@ -108,3 +108,41 @@ export function createSeedGlow(count) {
 
   return { points, positions, geometry }
 }
+
+/**
+ * How a pickup looks in high-contrast mode.
+ *
+ * Emissive does the heavy lifting rather than the base colour. A petal lit only
+ * by moonlight sits in the same tonal band as the grass around it, and no
+ * amount of recolouring separates the two until it starts emitting light of its
+ * own — which is also why the seed's halo grows rather than just brightening.
+ *
+ * Six material writes on a toggle and nothing per frame: every petal shares one
+ * material and every seed shares another, so all 40 pickups change at once.
+ */
+const NORMAL_LOOK = {
+  petal: COLORS.petal,
+  petalEmissive: 0.25,
+  seed: COLORS.seed,
+  seedEmissive: 0.45,
+  glowOpacity: 0.5,
+  glowSize: 0.5,
+}
+const CONTRAST_LOOK = {
+  petal: COLORS.petalHi,
+  petalEmissive: 0.95,
+  seed: COLORS.seedHi,
+  seedEmissive: 1.15,
+  glowOpacity: 0.9,
+  glowSize: 0.72,
+}
+
+export function setPickupContrast({ petals, seeds, glow }, on) {
+  const look = on ? CONTRAST_LOOK : NORMAL_LOOK
+  petals.material.color.setHex(look.petal)
+  petals.material.emissiveIntensity = look.petalEmissive
+  seeds.material.color.setHex(look.seed)
+  seeds.material.emissiveIntensity = look.seedEmissive
+  glow.points.material.opacity = look.glowOpacity
+  glow.points.material.size = look.glowSize
+}

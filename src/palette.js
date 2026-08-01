@@ -50,4 +50,12 @@ export const COLORS = {
   flowerCentre: 0xfff0c4,
   flowerStem: 0x7fae7c,
   flowerEye: 0x2e2a3d,
+
+  // High-contrast mode. Same hues, pushed much lighter and hotter, because the
+  // point is separation from the moss rather than a different-looking garden.
+  // A child who can't pick a petal out of the grass should still recognise the
+  // colour when she can.
+  petalHi: 0xfff0c8,
+  seedHi: 0xffd0e4,
+  patchGlowHi: 0xdcffe8,
 }

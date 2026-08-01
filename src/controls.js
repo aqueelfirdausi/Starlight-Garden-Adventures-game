@@ -195,6 +195,26 @@ export function createControls({ canvas, button, tap }) {
       return risePointerId !== null
     },
 
+    /**
+     * Drop every finger the game is currently tracking.
+     *
+     * Called when the pause panel opens. The panel covers the canvas so no
+     * further events arrive, which means a thumb that was mid-hold on Flutter
+     * Up would otherwise still be "down" when she resumes — she would let go
+     * during the pause and come back to a firefly climbing on its own.
+     */
+    release() {
+      touches.clear()
+      pendingTaps.clear()
+      steerPointerId = null
+      rawX = 0
+      rawY = 0
+      if (risePointerId !== null) {
+        risePointerId = null
+        button.classList.remove('held')
+      }
+    },
+
     /** Ease the reported steer toward the finger. Call once per frame. */
     update(dt) {
       const t = 1 - Math.exp(-INPUT_EASE * dt)
